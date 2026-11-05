@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents an authenticated user in the system, serving as the base for different roles.",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "role", "createdAt"]
+    },
+    "AiUsageLog": {
+      "title": "AiUsageLog",
+      "type": "object",
+      "description": "Tracks AI API usage for rate limiting and auditing purposes.",
+      "properties": {
+        "userId": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "operation": { "type": "string" },
+        "count": { "type": "number", "description": "Daily request count." },
+        "minuteCount": { "type": "number", "description": "Per-minute request count." },
+        "lastMinute": { "type": "string", "description": "YYYY-MM-DDTHH:mm representation of the last request window." },
+        "date": { "type": "string", "description": "YYYY-MM-DD representation of the day." },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "SchoolNotice": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SchoolNotice",
+      "type": "object",
+      "description": "Represents an official school message that has been simplified, translated, and approved by a teacher.",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "targetClass": { "type": "string" },
+        "recipients": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "originalMessage": { "type": "string" },
+        "simplifiedMessage": { "type": "string" },
+        "translations": { "type": "object" },
+        "audioUris": { "type": "object" },
+        "status": { "type": "string", "enum": ["draft", "pending_review", "approved"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "requireAcknowledgement": { "type": "boolean" }
+      },
+      "required": ["id", "teacherId", "title", "originalMessage", "status", "createdAt"]
+    }
+  },
+  "auth": {
+    "providers": ["password", "anonymous"]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": { "$ref": "#/backend/entities/User" },
+          "description": "Stores core user authentication and role information."
+        }
+      },
+      {
+        "path": "/ai_usage_logs/{usageId}",
+        "definition": {
+          "entityName": "AiUsageLog",
+          "schema": { "$ref": "#/backend/entities/AiUsageLog" },
+          "description": "Securely tracks AI usage per user per operation."
+        }
+      },
+      {
+        "path": "/school_notices/{noticeId}",
+        "definition": {
+          "entityName": "SchoolNotice",
+          "schema": { "$ref": "#/backend/entities/SchoolNotice" },
+          "description": "Stores official school messages created and approved by teachers."
+        }
+      }
+    ]
+  }
+}

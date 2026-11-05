@@ -1,0 +1,114 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- GLOBAL HELPER FUNCTIONS ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isSchoolAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "SchoolAdmin";
+    }
+
+    // --- COLLECTION RULES ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && (request.query.limit <= 100 || isSchoolAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    match /ai_usage_logs/{usageId} {
+      // STRICT SECURITY CORRECTION:
+      // Deny all direct client-side access. 
+      // This collection is managed exclusively by the trusted server-side infrastructure.
+      allow read, write: if false;
+    }
+
+    match /students/{studentId} {
+      allow create: if isSignedIn() && request.auth.uid == studentId;
+      allow get: if isOwner(studentId) || (isSignedIn() && exists(/databases/$(database)/documents/teachers/$(request.auth.uid))) || isSchoolAdmin();
+      allow list: if isSignedIn();
+      allow update: if isOwner(studentId);
+      allow delete: if isOwner(studentId);
+    }
+
+    match /parents/{parentId} {
+      allow create: if isSignedIn() && request.auth.uid == parentId;
+      allow get: if isOwner(parentId) || isSchoolAdmin();
+      allow list: if isSignedIn();
+      allow update: if isOwner(parentId);
+      allow delete: if isOwner(parentId);
+    }
+
+    match /teachers/{teacherId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && request.auth.uid == teacherId;
+      allow update: if isOwner(teacherId);
+      allow delete: if isSignedIn();
+    }
+
+    match /conversations/{conversationId} {
+      function isParticipant(data) {
+        return isSignedIn() && (data.senderId == request.auth.uid || data.receiverId == request.auth.uid);
+      }
+      allow get, list: if isParticipant(resource.data) || isSchoolAdmin();
+      allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+      allow update: if (isParticipant(resource.data) || isSchoolAdmin())
+        && request.resource.data.senderId == resource.data.senderId
+        && request.resource.data.receiverId == resource.data.receiverId;
+      allow delete: if isSignedIn() && (resource.data.senderId == request.auth.uid || isSchoolAdmin());
+    }
+
+    match /school_notices/{noticeId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.teacherId == request.auth.uid || 
+        resource.data.status == "approved" ||
+        isSchoolAdmin()
+      );
+      allow create: if isSignedIn() && (request.resource.data.teacherId == request.auth.uid || isSchoolAdmin());
+      allow update, delete: if isSignedIn() && (request.resource.data.teacherId == request.auth.uid || isSchoolAdmin());
+    }
+    
+    match /notifications/{notifId} {
+      allow read, update, delete: if isSignedIn() && (resource.data.parentUid == request.auth.uid || isSchoolAdmin());
+      allow create: if isSignedIn(); 
+      allow list: if isSignedIn() && (
+        resource.data.parentUid == request.auth.uid ||
+        isSchoolAdmin()
+      );
+    }
+
+    match /notice_acknowledgements/{ackId} {
+      allow read: if isSignedIn() && (
+        resource.data.parentUid == request.auth.uid || 
+        get(/databases/$(database)/documents/school_notices/$(resource.data.noticeId)).data.teacherId == request.auth.uid ||
+        isSchoolAdmin()
+      );
+      allow create: if isSignedIn() && request.resource.data.parentUid == request.auth.uid;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.parentUid;
+      allow list: if isSignedIn() && (
+        isSchoolAdmin() || 
+        exists(/databases/$(database)/documents/teachers/$(request.auth.uid))
+      );
+    }
+
+    match /notice_audit_logs/{logId} {
+      allow read: if isSignedIn() && (
+        isSchoolAdmin() || 
+        get(/databases/$(database)/documents/school_notices/$(resource.data.noticeId)).data.teacherId == request.auth.uid
+      );
+      allow create: if isSignedIn() && request.resource.data.actorId == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}
